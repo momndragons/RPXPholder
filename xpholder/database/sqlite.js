@@ -1,53 +1,77 @@
+const Database = require("better-sqlite3");
+
 class sqlLite3DatabaseService {
-    constructor(sqlite3, databaseName) {
-        this.sqlite3 = sqlite3;
-        this.databaseName = databaseName;
-        this.database;
+    constructor(databaseNameOrDatabase) {
+        this.databaseName = typeof databaseNameOrDatabase === "string"
+            ? databaseNameOrDatabase
+            : null;
+
+        this.database = typeof databaseNameOrDatabase === "string"
+            ? null
+            : databaseNameOrDatabase;
+
+        this.ownsDatabase = typeof databaseNameOrDatabase === "string";
     }
 
     async openDatabase() {
-        return await new Promise(async resolve => {
-            this.database = await new this.sqlite3.Database(this.databaseName, (err) => {
-                if (err) { console.error(err.message); resolve(false); return; }
-                resolve(this);
-            });
-        })
+        try {
+            if (!this.database || !this.database.open) {
+                this.database = new Database(this.databaseName, {
+                    timeout: 5000
+                });
+
+                this.ownsDatabase = true;
+            }
+
+            this.database.pragma("journal_mode = WAL");
+            this.database.pragma("foreign_keys = ON");
+
+            return this;
+        } catch (error) {
+            console.error(error.message);
+            return false;
+        }
     }
 
     async closeDatabase() {
-        return await new Promise(async resolve => {
-            this.database.close((err) => {
-                if (err) { console.error(err.message); resolve(false); return; }
-                resolve(this);
-            });
-            
-        })
+        try {
+            if (this.ownsDatabase && this.database && this.database.open) {
+                this.database.close();
+            }
+
+            return this;
+        } catch (error) {
+            console.error(error.message);
+            return false;
+        }
     }
 
-    async execute(query) {
-        return await new Promise((resolve, reject) => {
-            this.database.run(query, (err, data) => {
-                if (err) { console.error(err.message); resolve(false); return; }
-                resolve(true);
-            })
-        });
+    async execute(query, params = []) {
+        try {
+            this.database.prepare(query).run(...params);
+            return true;
+        } catch (error) {
+            console.error(error.message);
+            return false;
+        }
     }
 
-    async getAll(query) {
-        return await new Promise((resolve, reject) => {
-            this.database.all(query, (err, data) => {
-                if (err) { console.error(err.message); resolve(false); return; }
-                resolve(data);
-            })
-        });
+    async getAll(query, params = []) {
+        try {
+            return this.database.prepare(query).all(...params);
+        } catch (error) {
+            console.error(error.message);
+            return false;
+        }
     }
-    async get(query) {
-        return await new Promise((resolve, reject) => {
-            this.database.get(query, (err, data) => {
-                if (err) { console.error(err.message); resolve(false); return; }
-                resolve(data);
-            })
-        });
+
+    async get(query, params = []) {
+        try {
+            return this.database.prepare(query).get(...params);
+        } catch (error) {
+            console.error(error.message);
+            return false;
+        }
     }
 }
 
